@@ -1,146 +1,99 @@
 import * as BIP39 from 'bip39'
-import axios from 'axios'
+import { PrivKey } from 'cosmos-client'
+
 import {
   Address,
   Network,
-  TransferResult,
-  Balances,
   Prefix,
+  Coin,
   GetTxsParams,
-  TxPage,
-  Fees,
-  AccountResult,
   VaultTxParams,
   NormalTxParams,
-  FreezeParams,
-  MultiSendParams,
-  GetMarketsParams,
-} from './types/binance'
-
-import { crypto } from '@binance-chain/javascript-sdk'
-import { BncClient } from '@binance-chain/javascript-sdk/lib/client'
+  PaginatedQueryTxs,
+  BroadcastTxCommitResult,
+} from './types'
+import { ThorClient } from './thor/thor-client'
 
 /**
- * Interface for custom Binance client
+ * Interface for custom Thorchain client
  */
-export interface BinanceClient {
-  getBncClient(): BncClient
-  setNetwork(net: Network): BinanceClient
+export interface thorchainClient {
+  getThorClient(): ThorClient
+  setNetwork(net: Network): thorchainClient
   getNetwork(): Network
   getClientUrl(): string
   getExplorerUrl(): string
   getPrefix(): Prefix
-  setPhrase(phrase: string): BinanceClient
-  getAddress(): string | undefined
+  setPhrase(phrase: string): thorchainClient
+  getAddress(): Promise<string | null>
   validateAddress(address: string): boolean
-  getBalance(address?: Address): Promise<Balances>
-  getTransactions(params?: GetTxsParams): Promise<TxPage>
-  vaultTx(params: VaultTxParams): Promise<TransferResult>
-  normalTx(params: NormalTxParams): Promise<TransferResult>
-  freeze(params: FreezeParams): Promise<TransferResult>
-  unfreeze(params: FreezeParams): Promise<TransferResult>
-  //isTestnet(): boolean
-  // setPrivateKey(privateKey: string): Promise<BinanceClient>
-  // removePrivateKey(): Promise<void>
-  /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-  getMarkets(params: GetMarketsParams): Promise<any>
-  multiSend(params: MultiSendParams): Promise<TransferResult>
-  getAccount(address: string): Promise<AccountResult | null>
-  getFees(): Promise<Fees>
+  getBalance(address?: Address): Promise<Coin[] | null>
+  getTransactions(params?: GetTxsParams): Promise<PaginatedQueryTxs | null>
+  vaultTx(params: VaultTxParams): Promise<BroadcastTxCommitResult | null>
+  normalTx(params: NormalTxParams): Promise<BroadcastTxCommitResult | null>
 }
 
-/**
- * Custom Binance client
- *
- * @example
- * ```
- * import { Client as BinanceClient } from '@thorchain/asgardex-binance'
- *
- * # testnet (by default)
- * const client = new BinanceClient('any BIP39 mnemonic')
- * await client.transfer(...)
- * # mainnet
- * const client = await binance.client('any BIP39 mnemonic', Network.MAINNET)
- * await client.transfer(...)
- *
- * ```
- *
- * @class Binance
- * @implements {BinanceClient}
- */
-class Client implements BinanceClient {
+class Client implements thorchainClient {
   private network: Network
-  private bncClient: BncClient
-  private phrase: string | null = null
-  private address: string | null = null
-  private privateKey: string | null = null
-  private dirtyPrivateKey = true
+  private thorClient: ThorClient
+  private phrase?: string
+  private address: Address | null
+  private privkey: PrivKey | null
 
-  /**
-   * Client has to be initialised with network type and phrase
-   * It will throw an error if an invalid phrase has been passed
-   **/
-
-  constructor({ network = 'testnet', phrase }: { network: Network; phrase?: string }) {
-    // Invalid phrase will throw an error!
-    if (phrase) this.setPhrase(phrase)
+  constructor({ network = 'testnet', phrase }: { network: Network, phrase?: string }) {
     this.network = network
-    this.bncClient = new BncClient(this.getClientUrl())
-    this.bncClient.chooseNetwork(network)
+    this.thorClient = new ThorClient(this.getClientUrl(), this.getChainId(), this.getPrefix())
+    this.thorClient.chooseNetwork(network)
+    this.phrase = phrase
+    this.address = null
+    this.privkey = null
   }
 
-  // Returns BncClient
-  getBncClient(): BncClient {
-    return this.bncClient
+  getThorClient(): ThorClient {
+    return this.thorClient
   }
 
-  // get account using address
-  getAccount = async (address: string): Promise<AccountResult | null> => {
-    await this.bncClient.initChain()
-    return await this.bncClient.getAccount(address)
-  }
-
-  // update network
-  setNetwork(network: Network): BinanceClient {
+  setNetwork(network: Network): thorchainClient {
     this.network = network
-    this.bncClient = new BncClient(this.getClientUrl())
-    this.bncClient.chooseNetwork(network)
+    this.thorClient = new ThorClient(this.getClientUrl(), this.getChainId(), this.getPrefix())
+    this.thorClient.chooseNetwork(network)
     return this
   }
 
-  // Will return the desired network
   getNetwork(): Network {
     return this.network
   }
 
   getClientUrl = (): string => {
-    return this.network === 'testnet' ? 'https://testnet-dex.binance.org' : 'https://dex.binance.org'
+    return this.network === 'testnet' ? 'http://168.119.22.92:1317' : 'http://13.250.144.124:1317'
+  }
+
+  getChainId = (): string => {
+    return 'thorchain'
   }
 
   getExplorerUrl = (): string => {
-    return this.network === 'testnet' ? 'https://testnet-explorer.binance.org' : 'https://explorer.binance.org'
+    return this.network === 'testnet' ? 'https://thorchain.net/' : 'https://thorchain.net/'
   }
 
   getPrefix = (): Prefix => {
-    return this.network === 'testnet' ? 'tbnb' : 'bnb'
+    return this.network === 'testnet' ? 'tthor' : 'thor'
   }
 
   static generatePhrase = (): string => {
     return BIP39.generateMnemonic()
   }
 
-  // Sets this.phrase to be accessed later
-  setPhrase = (phrase: string): BinanceClient => {
-    if (this.phrase && this.phrase === phrase) return this
+  setPhrase = (phrase: string): thorchainClient => {
+    if (this.phrase !== phrase) {
+      if (!Client.validatePhrase(phrase)) {
+        throw Error('Invalid BIP39 phrase passed to Binance Client')
+      }
 
-    if (!Client.validatePhrase(phrase)) {
-      throw Error('Invalid BIP39 phrase passed to Binance Client')
+      this.phrase = phrase
+      this.address = null
+      this.privkey = null
     }
-    this.phrase = phrase
-    // whenever a new phrase has been added, a private key + address need to be renewed
-    this.address = null
-    this.privateKey = null
-    this.dirtyPrivateKey = true
     return this
   }
 
@@ -148,168 +101,85 @@ class Client implements BinanceClient {
     return BIP39.validateMnemonic(phrase)
   }
 
-  /**
-   * @private
-   * Returns private key
-   * Throws an error if phrase has not been set before
-   * */
-  private getPrivateKey = () => {
-    if (!this.privateKey) {
-      if (!this.phrase) throw Error('Phrase has not been set before')
-      const privateKey = crypto.getPrivateKeyFromMnemonic(this.phrase)
-      this.privateKey = privateKey
-      return privateKey
+  getPrivkey = async (): Promise<PrivKey | null> => {
+    if (!this.privkey && this.phrase) {
+      this.privkey = await this.thorClient.getPrivKeyFromMnemonic(this.phrase)
     }
-    return this.privateKey
+
+    return this.privkey
   }
 
-  private setPrivateKey = async () => {
-    if (this.dirtyPrivateKey) {
-      let privateKey
-      try {
-        privateKey = this.getPrivateKey()
-      } catch (error) {
-        return Promise.reject(error)
-      }
-      await this.bncClient.setPrivateKey(privateKey).catch((error) => Promise.reject(error))
-      this.dirtyPrivateKey = false
-    }
-    return Promise.resolve()
-  }
+  getAddress = async (): Promise<Address | null> => {
+    const privkey = await this.getPrivkey()
 
-  getAddress = (): string | undefined => {
-    if (this.address) return this.address
-
-    // Extract private key
-    let privateKey
-    try {
-      privateKey = this.getPrivateKey()
-    } catch (error) {
-      return undefined
+    if (!this.address && privkey) {
+      this.address = await this.thorClient.getAddressFromPrivKey(privkey)
     }
 
-    const address = crypto.getAddressFromPrivateKey(privateKey, this.getPrefix()) // Extract address with prefix
-    this.address = address
-    return address
+    return this.address
   }
 
   validateAddress = (address: Address): boolean => {
-    return this.bncClient.checkAddress(address, this.getPrefix())
+    return this.thorClient.checkAddress(address)
   }
 
-  getBalance = async (address?: Address): Promise<Balances> => {
-    await this.bncClient.initChain()
-    return this.bncClient.getBalance(address || this.getAddress() || undefined)
+  getBalance = async (address?: Address): Promise<Coin[] | null> => {
+    const req_addr = address || await this.getAddress()
+    if (req_addr) {
+      return await this.thorClient.getBalance(req_addr)
+    }
+    return null
   }
 
-  getTransactions = async (params: GetTxsParams = {}): Promise<TxPage> => {
+  getTransactions = async (params: GetTxsParams = {}): Promise<PaginatedQueryTxs | null> => {
     const {
-      address = this.getAddress(),
-      blockHeight,
-      endTime,
+      messageAction,
+      messageSender,
+      page,
       limit,
-      offset,
-      side,
-      startTime,
-      txAsset,
-      txType,
+      txMinHeight,
+      txMaxHeight,
     } = params
 
-    const clientUrl = `${this.getClientUrl()}/api/v1/transactions`
-    const url = new URL(clientUrl)
-    if (address) url.searchParams.set('address', address)
-    if (blockHeight) url.searchParams.set('blockHeight', blockHeight.toString())
-    if (endTime) url.searchParams.set('endTime', endTime.toString())
-    if (limit) url.searchParams.set('limit', limit.toString())
-    if (offset) url.searchParams.set('offset', offset.toString())
-    if (side) url.searchParams.set('side', side.toString())
-    if (startTime) url.searchParams.set('startTime', startTime.toString())
-    if (txAsset) url.searchParams.set('txAsset', txAsset.toString())
-    if (txType) url.searchParams.set('txType', txType.toString())
-
-    await this.bncClient.initChain()
-
-    try {
-      const response = await axios.get<TxPage>(url.toString())
-      return response.data
-    } catch (error) {
-      return Promise.reject(error)
-    }
+    return await this.thorClient.searchTx(messageAction, messageSender, page, limit, txMinHeight, txMaxHeight)
   }
 
-  vaultTx = async ({ addressFrom, addressTo, amount, asset, memo }: VaultTxParams): Promise<TransferResult> => {
-    await this.bncClient.initChain()
-    await this.setPrivateKey().catch((error) => Promise.reject(error))
-
-    const from = addressFrom || this.getAddress()
-    if (!from)
+  vaultTx = async ({ addressFrom, addressTo, amount, asset, memo }: VaultTxParams): Promise<BroadcastTxCommitResult | null> => {
+    const from = addressFrom || await this.getAddress()
+    const privkey = await this.getPrivkey()
+    if (!from) {
       return Promise.reject(
         new Error(
           'Parameter `addressFrom` has to be set. Or set a phrase by calling `setPhrase` before to use an address of an imported key.',
         ),
       )
-    return await this.bncClient.transfer(from, addressTo, amount, asset, memo)
+    } else if (!privkey) {
+      return Promise.reject(
+        new Error(
+          'Set privkey by calling `setPhrase` before to use an address of an imported key.',
+        ),
+      )
+    }
+    return await this.thorClient.transfer(privkey, from, addressTo, amount, asset, memo)
   }
 
-  normalTx = async ({ addressFrom, addressTo, amount, asset }: NormalTxParams): Promise<TransferResult> => {
-    await this.bncClient.initChain()
-    await this.setPrivateKey().catch((error) => Promise.reject(error))
-
-    const from = addressFrom || this.getAddress()
-    if (!from)
+  normalTx = async ({ addressFrom, addressTo, amount, asset }: NormalTxParams): Promise<BroadcastTxCommitResult | null> => {
+    const from = addressFrom || await this.getAddress()
+    const privkey = await this.getPrivkey()
+    if (!from) {
       return Promise.reject(
         new Error(
           'Parameter `addressFrom` has to be set. Or set a phrase by calling `setPhrase` before to use an address of an imported key.',
         ),
       )
-    return await this.bncClient.transfer(from, addressTo, amount, asset)
-  }
-
-  freeze = async ({ address, asset, amount }: FreezeParams): Promise<TransferResult> => {
-    await this.bncClient.initChain()
-    await this.setPrivateKey().catch((error) => Promise.reject(error))
-
-    const addr = address || this.getAddress()
-    if (!addr)
+    } else if (!privkey) {
       return Promise.reject(
         new Error(
-          'Address has to be set. Or set a phrase by calling `setPhrase` before to use an address of an imported key.',
+          'Set privkey by calling `setPhrase` before to use an address of an imported key.',
         ),
       )
-    return await this.bncClient.tokens.freeze(addr, asset, amount)
-  }
-
-  unfreeze = async ({ address, asset, amount }: FreezeParams): Promise<TransferResult> => {
-    await this.bncClient.initChain()
-    await this.setPrivateKey().catch((error) => Promise.reject(error))
-    const addr = address || this.getAddress()
-    if (!addr)
-      return Promise.reject(
-        new Error(
-          'Address has to be set. Or set a phrase by calling `setPhrase` before to use an address of an imported key.',
-        ),
-      )
-    return await this.bncClient.tokens.unfreeze(addr, asset, amount)
-  }
-
-  getMarkets = async ({ limit = 1000, offset = 0 }: GetMarketsParams) => {
-    await this.bncClient.initChain()
-    return this.bncClient.getMarkets(limit, offset)
-  }
-
-  multiSend = async ({ address, transactions, memo = '' }: MultiSendParams) => {
-    await this.bncClient.initChain()
-    return await this.bncClient.multiSend(address, transactions, memo)
-  }
-
-  getFees = async (): Promise<Fees> => {
-    await this.bncClient.initChain()
-    try {
-      const response = await axios.get<Fees>(`${this.getClientUrl()}/api/v1/fees`)
-      return response.data
-    } catch (error) {
-      return Promise.reject(error)
     }
+    return await this.thorClient.transfer(privkey, from, addressTo, amount, asset)
   }
 }
 

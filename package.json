@@ -29,14 +29,15 @@
     "build": "rollup -c",
     "test": "jest",
     "lint": "eslint \"{src,__tests__}/**/*.ts\" --fix",
-    "prepublishOnly": "yarn build"
+    "prepublishOnly": "yarn build",
+    "start:example": "ts-node example/index.ts"
   },
   "devDependencies": {
-    "@binance-chain/javascript-sdk": "^4.1.1",
     "@types/big.js": "^4.0.5",
     "@types/jest": "^26.0.10",
     "@typescript-eslint/eslint-plugin": "^3.10.1",
     "@typescript-eslint/parser": "^3.10.1",
+    "cosmos-client": "^0.39.2",
     "dotenv": "^8.2.0",
     "eslint": "^7.7.0",
     "eslint-config-prettier": "^6.11.0",
@@ -52,8 +53,9 @@
     "rollup-plugin-peer-deps-external": "^2.2.3",
     "rollup-plugin-typescript2": "^0.27.2",
     "ts-jest": "^26.3.0",
+    "ts-node": "^9.0.0",
     "tslib": "^2.0.1",
-    "typescript": "^4.0.2"
+    "typescript": "^4.0.3"
   },
   "publishConfig": {
     "access": "public"
