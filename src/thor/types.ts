@@ -1,11 +1,13 @@
 import { AccAddress, Msg } from 'cosmos-client'
-import { Coin } from 'cosmos-client/api'
+import { Coin, PaginatedQueryTxs, BroadcastTxCommitResult, StdTxFee } from 'cosmos-client/api'
+
+export { Coin, PaginatedQueryTxs, BroadcastTxCommitResult, StdTxFee }
 
 export class MsgSend extends Msg {
   from_address: AccAddress
   to_address: AccAddress
   amount: Coin[]
-  
+
   constructor(from_address: AccAddress, to_address: AccAddress, amount: Coin[]) {
     super()
 
@@ -13,7 +15,7 @@ export class MsgSend extends Msg {
     this.to_address = to_address
     this.amount = amount
   }
-  
+
   static fromJSON(value: any): MsgSend {
     return new MsgSend(AccAddress.fromBech32(value.from_address), AccAddress.fromBech32(value.to_address), value.amount)
   }

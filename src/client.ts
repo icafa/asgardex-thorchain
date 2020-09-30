@@ -37,16 +37,16 @@ class Client implements thorchainClient {
   private network: Network
   private thorClient: ThorClient
   private phrase?: string
-  private address: Address | null
-  private privkey: PrivKey | null
+  private address: Address | null = null
+  private privkey: PrivKey | null = null
 
-  constructor({ network = 'testnet', phrase }: { network: Network, phrase?: string }) {
+  constructor({ network = 'testnet', phrase }: { network: Network; phrase?: string }) {
     this.network = network
     this.thorClient = new ThorClient(this.getClientUrl(), this.getChainId(), this.getPrefix())
     this.thorClient.chooseNetwork(network)
-    this.phrase = phrase
-    this.address = null
-    this.privkey = null
+    if (phrase) {
+      this.setPhrase(phrase)
+    }
   }
 
   getThorClient(): ThorClient {
@@ -124,7 +124,7 @@ class Client implements thorchainClient {
   }
 
   getBalance = async (address?: Address): Promise<Coin[] | null> => {
-    const req_addr = address || await this.getAddress()
+    const req_addr = address || (await this.getAddress())
     if (req_addr) {
       return await this.thorClient.getBalance(req_addr)
     }
@@ -132,9 +132,10 @@ class Client implements thorchainClient {
   }
 
   getTransactions = async (params: GetTxsParams = {}): Promise<PaginatedQueryTxs | null> => {
+    const address = await this.getAddress()
     const {
       messageAction,
-      messageSender,
+      messageSender = address ? address : undefined,
       page,
       limit,
       txMinHeight,
@@ -144,8 +145,14 @@ class Client implements thorchainClient {
     return await this.thorClient.searchTx(messageAction, messageSender, page, limit, txMinHeight, txMaxHeight)
   }
 
-  vaultTx = async ({ addressFrom, addressTo, amount, asset, memo }: VaultTxParams): Promise<BroadcastTxCommitResult | null> => {
-    const from = addressFrom || await this.getAddress()
+  vaultTx = async ({
+    addressFrom,
+    addressTo,
+    amount,
+    asset,
+    memo,
+  }: VaultTxParams): Promise<BroadcastTxCommitResult | null> => {
+    const from = addressFrom || (await this.getAddress())
     const privkey = await this.getPrivkey()
     if (!from) {
       return Promise.reject(
@@ -155,16 +162,19 @@ class Client implements thorchainClient {
       )
     } else if (!privkey) {
       return Promise.reject(
-        new Error(
-          'Set privkey by calling `setPhrase` before to use an address of an imported key.',
-        ),
+        new Error('Set privkey by calling `setPhrase` before to use an address of an imported key.'),
       )
     }
     return await this.thorClient.transfer(privkey, from, addressTo, amount, asset, memo)
   }
 
-  normalTx = async ({ addressFrom, addressTo, amount, asset }: NormalTxParams): Promise<BroadcastTxCommitResult | null> => {
-    const from = addressFrom || await this.getAddress()
+  normalTx = async ({
+    addressFrom,
+    addressTo,
+    amount,
+    asset,
+  }: NormalTxParams): Promise<BroadcastTxCommitResult | null> => {
+    const from = addressFrom || (await this.getAddress())
     const privkey = await this.getPrivkey()
     if (!from) {
       return Promise.reject(
@@ -174,9 +184,7 @@ class Client implements thorchainClient {
       )
     } else if (!privkey) {
       return Promise.reject(
-        new Error(
-          'Set privkey by calling `setPhrase` before to use an address of an imported key.',
-        ),
+        new Error('Set privkey by calling `setPhrase` before to use an address of an imported key.'),
       )
     }
     return await this.thorClient.transfer(privkey, from, addressTo, amount, asset)

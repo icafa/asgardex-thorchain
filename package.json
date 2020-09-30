@@ -1,14 +1,13 @@
 {
-  "name": "@thorchain/asgardex-binance",
+  "name": "@thorchain/asgardex-thorchain",
   "version": "3.0.1",
-  "description": "Custom Binance client and utilities used by ASGARDEX clients",
+  "description": "Custom Thorchain client and utilities used by ASGARDEX clients",
   "keywords": [
     "THORChain",
-    "ASGARDEX",
-    "Binance"
+    "ASGARDEX"
   ],
   "author": "THORChain",
-  "homepage": "https://gitlab.com/thorchain/asgardex-common/asgardex-binance",
+  "homepage": "https://gitlab.com/thorchain/asgardex-common/asgardex-thorchain",
   "license": "MIT",
   "main": "lib/index.js",
   "module": "lib/index.esm.js",
@@ -22,7 +21,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "git@gitlab.com:thorchain/asgardex-common/asgardex-binance.git"
+    "url": "git@gitlab.com:thorchain/asgardex-common/asgardex-thorchain.git"
   },
   "scripts": {
     "clean": "rimraf lib/**",
@@ -60,7 +59,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "peerDependencies": {
-    "@binance-chain/javascript-sdk": "^4.1.1"
+  "dependencies": {
+    "nock": "^13.0.4"
   }
 }

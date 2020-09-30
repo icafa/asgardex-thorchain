@@ -53,7 +53,6 @@ export class ThorClient {
 
       const account = AccAddress.fromBech32(address)
       return account.toBech32() == address
-
     } catch (err) {
       return false
     }
@@ -62,21 +61,46 @@ export class ThorClient {
   async getBalance(address: string) {
     try {
       const accAddress = AccAddress.fromBech32(address)
-      const account = await auth
-        .accountsAddressGet(this.sdk, accAddress)
-        .then((res) => res.data.result)
+      const account = await auth.accountsAddressGet(this.sdk, accAddress).then((res) => res.data.result)
 
       return account.coins
     } catch (err) {
+      console.log('getBalance error')
       return null
     }
   }
 
-  async searchTx(messageAction?: string, messageSender?: string, page?: number, limit?: number, txMinHeight?: number, txMaxHeight?: number) {
+  async searchTx(
+    messageAction?: string,
+    messageSender?: string,
+    page?: number,
+    limit?: number,
+    txMinHeight?: number,
+    txMaxHeight?: number,
+  ) {
     try {
-      return await auth.txsGet(this.sdk, messageAction, messageSender, page, limit, txMinHeight, txMaxHeight).then((res) => res.data)
+      const search_result = await auth
+        .txsGet(this.sdk, messageAction, messageSender, page, limit, txMinHeight, txMaxHeight)
+        .then((res) => res.data)
+
+      return {
+        ...search_result,
+        txs: search_result.txs?.map((tx: any) => {
+          return {
+            hash: tx.txhash,
+            height: tx.height,
+            tx: tx.tx,
+            result: {
+              log: tx.raw_log,
+              gas_wanted: tx.gas_wanted,
+              gas_used: tx.gas_used,
+              tags: tx.logs,
+            },
+          }
+        }),
+      }
     } catch (err) {
-      console.log(err)
+      console.log('searchTx error')
       return null
     }
   }
@@ -86,9 +110,7 @@ export class ThorClient {
       const fromAddress = AccAddress.fromBech32(from)
       const toAddress = AccAddress.fromBech32(to)
 
-      const account = await auth
-        .accountsAddressGet(this.sdk, fromAddress)
-        .then((res) => res.data.result)
+      const account = await auth.accountsAddressGet(this.sdk, fromAddress).then((res) => res.data.result)
 
       const unsignedStdTx = await bank
         .accountsAddressTransfersPost(this.sdk, toAddress, {
@@ -114,7 +136,7 @@ export class ThorClient {
           amount: msg.amount,
         })
       })
-      
+
       const signedStdTx = auth.signStdTx(
         this.sdk,
         privkey,
@@ -123,12 +145,11 @@ export class ThorClient {
         account.sequence.toString(),
       )
 
-      const result = await auth
-        .txsPost(this.sdk, signedStdTx, 'sync')
-        .then((res) => res.data)
+      const result = await auth.txsPost(this.sdk, signedStdTx, 'sync').then((res) => res.data)
 
       return result
     } catch (err) {
+      console.log('transfer error')
       return null
     }
   }

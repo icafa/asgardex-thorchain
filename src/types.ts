@@ -1,9 +1,7 @@
 import { BigSource } from 'big.js'
-import { Coin, PaginatedQueryTxs, BroadcastTxCommitResult} from 'cosmos-client/api'
+import { NETWORK_PREFIX_MAPPING, PaginatedQueryTxs, Coin, BroadcastTxCommitResult, StdTxFee } from './thor/types'
 
-import { NETWORK_PREFIX_MAPPING } from './thor/types'
-
-export type { Coin, PaginatedQueryTxs, BroadcastTxCommitResult }
+export type { Coin, PaginatedQueryTxs, BroadcastTxCommitResult, StdTxFee }
 
 export type Address = string
 
